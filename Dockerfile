@@ -20,7 +20,10 @@ RUN pnpm install --frozen-lockfile
 # Build the app
 FROM build-deps AS build
 COPY . .
-RUN mkdir -p .data && pnpm build
+RUN mkdir -p .data \
+  && pnpm build \
+  && ASTRO_DB_REMOTE_URL=file:/app/.data/astro.db pnpm astro db push --remote \
+  && ASTRO_DB_REMOTE_URL=file:/app/.data/astro.db pnpm astro db execute db/seed.ts --remote
 
 # Runtime image
 FROM node:lts-alpine AS runtime
@@ -33,6 +36,7 @@ ENV ASTRO_DATABASE_FILE=/app/.data/astro.db
 # Copy production node_modules and built app
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/.data ./.data
 RUN mkdir -p .data
 
 EXPOSE 4321
