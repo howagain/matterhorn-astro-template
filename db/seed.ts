@@ -1,6 +1,9 @@
-import { db } from 'astro:db';
+import { db, Todos } from "astro:db";
 
 // https://astro.build/db/seed
 export default async function seed() {
-	// TODO
+  await db.insert(Todos).values([
+    { title: "Learn Astro DB", completed: false },
+    { title: "Build Docker image", completed: true },
+  ]);
 }
