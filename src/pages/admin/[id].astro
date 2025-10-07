@@ -1,0 +1,225 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import CouponsRoot from "../../components/CouponsRoot";
+import Coupon, { type CouponData } from "../../components/Coupon";
+
+const { id } = Astro.params;
+const dealerId = String(id || "");
+---
+
+<Layout title={`Admin – Dealer ${dealerId}`}>
+  <style>
+    .page { display: grid; grid-template-columns: 1.1fr 1fr; gap: 1.25rem; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .row { display: grid; grid-template-columns: 180px 1fr; gap: .75rem; align-items: center; margin: 0 0 .75rem; }
+    .kv { display: grid; grid-template-columns: 1fr 1fr auto; gap: .5rem; }
+    .btn { padding: .5rem .8rem; border-radius: 8px; border: 1px solid #d4d4d8; background: white; cursor: pointer; }
+    .btn.primary { background: #0ea5e9; border-color: #0ea5e9; color: white; }
+    .kv-row { display: contents; }
+  </style>
+
+  <CouponsRoot>
+    <AdminApp dealerId={dealerId} />
+  </CouponsRoot>
+</Layout>
+
+{/* Solid island */}
+<script is:ts>
+  import { createSignal, For, onMount } from "solid-js";
+  import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query";
+  import Coupon, { type CouponData } from "../../components/Coupon";
+
+  function defaultCoupon(dealerId: string): CouponData {
+    return {
+      dealerId,
+      title: "New Coupon",
+      description: "Describe your offer",
+      discountAmount: "$100 OFF",
+      expirationDate: "2025-12-31",
+      buttonText: "Redeem",
+      buttonColor: "#0ea5e9",
+      backgroundImage: "",
+      layout: "horizontal",
+      customFields: {},
+    };
+  }
+
+  export function AdminApp(props: { dealerId: string }) {
+    const queryClient = useQueryClient();
+    const couponsQuery = createQuery(() => ({
+      queryKey: ["coupons", props.dealerId],
+      queryFn: async (): Promise<CouponData[]> => {
+        const res = await fetch(`/api/coupons/${encodeURIComponent(props.dealerId)}`);
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        const items = (await res.json()) as any[];
+        return items as CouponData[];
+      },
+    }));
+
+    const [current, setCurrent] = createSignal<CouponData>(defaultCoupon(props.dealerId));
+    const [layoutJsonText, setLayoutJsonText] = createSignal<string>(JSON.stringify({ blocks: [] }, null, 2));
+
+    onMount(() => {
+      const first = couponsQuery.data?.[0];
+      if (first) setCurrent(first);
+    });
+
+    const saveMutation = createMutation(() => ({
+      mutationFn: async (payload: CouponData) => {
+        const res = await fetch(`/api/coupons/${encodeURIComponent(props.dealerId)}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: payload.id,
+            title: payload.title,
+            description: payload.description,
+            discount_amount: payload.discountAmount,
+            expiration_date: payload.expirationDate,
+            button_text: payload.buttonText,
+            button_color: payload.buttonColor,
+            background_image: payload.backgroundImage,
+            layout: payload.layout,
+            custom_fields: payload.customFields,
+          }),
+        });
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        if (res.status === 201) {
+          const { id } = await res.json();
+          setCurrent({ ...payload, id });
+        }
+      },
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["coupons", props.dealerId] }),
+    }));
+
+    const pageQuery = createQuery(() => ({
+      queryKey: ["page", props.dealerId],
+      queryFn: async () => {
+        const res = await fetch(`/api/pages/${encodeURIComponent(props.dealerId)}`);
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        const data = await res.json();
+        if (data?.layoutJson) setLayoutJsonText(JSON.stringify(data.layoutJson, null, 2));
+        return data;
+      },
+    }));
+
+    const savePageMutation = createMutation(() => ({
+      mutationFn: async () => {
+        let parsed: any = {};
+        try { parsed = JSON.parse(layoutJsonText()); } catch { throw new Error("Invalid JSON"); }
+        const existing = await pageQuery.refetch();
+        const id = existing.data?.id;
+        const res = await fetch(`/api/pages/${encodeURIComponent(props.dealerId)}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id, layout_json: parsed }),
+        });
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      },
+      onSuccess: () => pageQuery.refetch(),
+    }));
+
+    const addCustomField = () => {
+      const next = { ...(current()), customFields: { ...(current().customFields || {}) } };
+      let i = 1;
+      let key = `key${i}`;
+      while (next.customFields![key] !== undefined) {
+        i += 1;
+        key = `key${i}`;
+      }
+      next.customFields![key] = "";
+      setCurrent(next);
+    };
+
+    const removeCustomField = (k: string) => {
+      const next = { ...(current()), customFields: { ...(current().customFields || {}) } };
+      delete next.customFields![k];
+      setCurrent(next);
+    };
+
+    return (
+      <div class="page">
+        <div class="card">
+          <h2 style={{ "margin-bottom": "0.75rem" }}>Coupon Builder</h2>
+          <div class="row">
+            <label>Title</label>
+            <input type="text" value={current().title} onInput={(e) => setCurrent({ ...current(), title: e.currentTarget.value })} />
+          </div>
+          <div class="row">
+            <label>Description</label>
+            <textarea value={current().description} onInput={(e) => setCurrent({ ...current(), description: e.currentTarget.value })} />
+          </div>
+          <div class="row">
+            <label>Discount Amount</label>
+            <input type="text" value={current().discountAmount} onInput={(e) => setCurrent({ ...current(), discountAmount: e.currentTarget.value })} />
+          </div>
+          <div class="row">
+            <label>Expiration Date</label>
+            <input type="text" value={current().expirationDate} onInput={(e) => setCurrent({ ...current(), expirationDate: e.currentTarget.value })} />
+          </div>
+          <div class="row">
+            <label>Button Text</label>
+            <input type="text" value={current().buttonText} onInput={(e) => setCurrent({ ...current(), buttonText: e.currentTarget.value })} />
+          </div>
+          <div class="row">
+            <label>Button Color</label>
+            <input type="text" value={current().buttonColor} onInput={(e) => setCurrent({ ...current(), buttonColor: e.currentTarget.value })} />
+          </div>
+          <div class="row">
+            <label>Background Image URL</label>
+            <input type="text" value={current().backgroundImage} onInput={(e) => setCurrent({ ...current(), backgroundImage: e.currentTarget.value })} />
+          </div>
+          <div class="row">
+            <label>Layout</label>
+            <select value={current().layout} onChange={(e) => setCurrent({ ...current(), layout: e.currentTarget.value as any })}>
+              <option value="horizontal">horizontal</option>
+              <option value="vertical">vertical</option>
+              <option value="modal">modal</option>
+            </select>
+          </div>
+
+          <div style={{ margin: "1rem 0 .5rem", "font-weight": 600 }}>Custom Fields</div>
+          <div class="kv">
+            <For each={Object.entries(current().customFields || {})}>
+              {([k, v]) => (
+                <div class="kv-row">
+                  <input type="text" value={k}
+                         onChange={(e) => {
+                           const next = { ...(current()), customFields: { ...(current().customFields || {}) } };
+                           const val = next.customFields![k];
+                           delete next.customFields![k];
+                           next.customFields![e.currentTarget.value] = val;
+                           setCurrent(next);
+                         }} />
+                  <input type="text" value={v} onInput={(e) => setCurrent({ ...current(), customFields: { ...(current().customFields || {}), [k]: e.currentTarget.value } })} />
+                  <button class="btn" onClick={() => removeCustomField(k)}>Remove</button>
+                </div>
+              )}
+            </For>
+          </div>
+          <div style={{ margin: ".75rem 0" }}>
+            <button class="btn" onClick={addCustomField}>Add Field</button>
+          </div>
+
+          <div style={{ display: "flex", gap: ".5rem" }}>
+            <button class="btn primary" onClick={() => saveMutation.mutateAsync(current())}>Save</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style={{ "margin-bottom": "0.75rem" }}>Live Preview</h2>
+          <Coupon coupon={current()} />
+        </div>
+
+        <div class="card">
+          <h2 style={{ "margin-bottom": "0.75rem" }}>Page Layout JSON (optional)</h2>
+          <p style={{ margin: "0 0 .5rem", color: "#475569" }}>Define blocks like: {"{"}"blocks":[{"{"}"type":"coupon","props":{"{"}"coupon_id":"abc"}}]{"}"}</p>
+          <textarea style={{ width: "100%", height: "220px" }} value={layoutJsonText()} onInput={(e) => setLayoutJsonText(e.currentTarget.value)} />
+          <div style={{ margin: ".75rem 0 0" }}>
+            <button class="btn primary" onClick={() => savePageMutation.mutateAsync()}>Save Layout</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+</script>
+

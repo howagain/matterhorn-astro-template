@@ -1,0 +1,78 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import CouponsRoot from "../../components/CouponsRoot";
+import Coupon, { type CouponData } from "../../components/Coupon";
+
+const { id } = Astro.params;
+const dealerId = String(id || "");
+---
+
+<Layout title={`Dealer ${dealerId} – Coupon`}>
+  <style>
+    .page { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  </style>
+
+  <CouponsRoot>
+    <DealerApp dealerId={dealerId} />
+  </CouponsRoot>
+</Layout>
+
+{/* Solid island */}
+<script is:ts>
+  import { createQuery } from "@tanstack/solid-query";
+  import Coupon, { type CouponData } from "../../components/Coupon";
+  import { Show } from "solid-js";
+
+  export function DealerApp(props: { dealerId: string }) {
+    const couponsQuery = createQuery(() => ({
+      queryKey: ["coupons", props.dealerId],
+      queryFn: async (): Promise<CouponData[]> => {
+        const res = await fetch(`/api/coupons/${encodeURIComponent(props.dealerId)}`);
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        return (await res.json()) as CouponData[];
+      },
+    }));
+
+    const first = () => couponsQuery.data?.[0];
+    const pageQuery = createQuery(() => ({
+      queryKey: ["page", props.dealerId],
+      queryFn: async () => {
+        const res = await fetch(`/api/pages/${encodeURIComponent(props.dealerId)}`);
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        return await res.json();
+      },
+    }));
+
+    return (
+      <div class="page">
+        <Show when={!couponsQuery.isLoading && !pageQuery.isLoading} fallback={<p>Loading…</p>}>
+          <Show when={!couponsQuery.error && !pageQuery.error} fallback={<p style={{ color: "#dc2626" }}>{String(couponsQuery.error || pageQuery.error)}</p>}>
+            <RenderPage coupons={couponsQuery.data || []} page={pageQuery.data} />
+          </Show>
+        </Show>
+      </div>
+    );
+  }
+
+  function RenderPage(props: { coupons: CouponData[]; page: any }) {
+    const getCouponById = (id: string) => props.coupons.find((c) => c.id === id);
+    const blocks = () => props.page?.layoutJson?.blocks as any[] | undefined;
+
+    if (blocks()?.length) {
+      return (
+        <div style={{ display: "flex", "flex-direction": "column", gap: "1rem" }}>
+          {blocks()!.map((b) => {
+            if (b.type === "coupon" && b.props?.coupon_id) {
+              const c = getCouponById(String(b.props.coupon_id));
+              if (c) return <Coupon coupon={c} />;
+            }
+            return null;
+          })}
+        </div>
+      );
+    }
+    const first = props.coupons[0];
+    return first ? <Coupon coupon={first} /> : <p>No coupons configured yet.</p>;
+  }
+</script>
+
