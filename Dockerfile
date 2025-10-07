@@ -20,9 +20,10 @@ RUN pnpm install --frozen-lockfile
 # Build the app
 FROM build-deps AS build
 COPY . .
-RUN mkdir -p .data \
+RUN rm -f .data/astro.db \
+  && mkdir -p .data \
   && pnpm build \
-  && ASTRO_DB_REMOTE_URL=file:/app/.data/astro.db pnpm astro db push --remote \
+  && ASTRO_DB_REMOTE_URL=file:/app/.data/astro.db pnpm astro db push --remote --force-reset \
   && ASTRO_DB_REMOTE_URL=file:/app/.data/astro.db pnpm astro db execute db/seed.ts --remote
 
 # Runtime image
