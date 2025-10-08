@@ -7,11 +7,18 @@ import solidJs from '@astrojs/solid-js';
 
 import db from '@astrojs/db';
 
+import tailwindcss from '@tailwindcss/vite';
+
 // https://astro.build/config
 export default defineConfig({
   adapter: node({
-    mode: 'standalone'
+    mode: "standalone",
   }),
 
-  integrations: [solidJs(), db()]
+  output: "server",
+  integrations: [solidJs(), db()],
+
+  vite: {
+    plugins: [tailwindcss()],
+  },
 });
