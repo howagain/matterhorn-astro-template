@@ -1,0 +1,16 @@
+---
+import { Coupon } from "../../components/coupon/coupon";
+import { getCouponDetailsFromId } from "../../service/coupons/coupon.service";
+import Layout from "../../layouts/Layout.astro";
+
+const {couponId} = Astro.params;
+
+const coupon = getCouponDetailsFromId(couponId ?? '');
+if(coupon.id == '') {
+    return Astro.response.status = 404
+}
+---
+
+<Layout>
+    <Coupon coupon={coupon} isPrintPage={true} client:load/>
+</Layout>
