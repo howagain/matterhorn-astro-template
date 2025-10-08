@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import { JSX } from "solid-js";
+import { type JSX } from "solid-js";
 
 export default function CouponsRoot(props: { children: JSX.Element }) {
   const queryClient = new QueryClient();

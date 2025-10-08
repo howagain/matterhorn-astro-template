@@ -12,7 +12,13 @@ export const GET: APIRoute = async ({ params }) => {
     .from(DealerPagesTable)
     .where(eq(DealerPagesTable.dealerId, dealerId));
   const first = rows[0];
-  if (!first) return new Response(JSON.stringify(null), { status: 200, headers: { "content-type": "application/json" } });
+  if (!first) {
+    const fallback = { id: null, dealerId, layoutJson: { blocks: [] } };
+    return new Response(JSON.stringify(fallback), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
   const config = { ...first, layoutJson: JSON.parse(first.layoutJson) };
   return new Response(JSON.stringify(config), { status: 200, headers: { "content-type": "application/json" } });
 };
